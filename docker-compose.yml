@@ -1,5 +1,11 @@
 version: '3.8'
 
+# Auto Marketer is the marketing half of the two-service stack.
+# Pair it with the sibling `info-broker` service which supplies prospect
+# profiles via REST. The two services may share the same Postgres
+# instance — they use different databases (auto_marketer vs info_broker)
+# and never read each other's tables.
+
 services:
   postgres:
     image: postgres:15
@@ -12,14 +18,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  qdrant:
-    image: qdrant/qdrant
+  auto-marketer-api:
+    build: .
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
     ports:
-      - "6335:6333"
-      - "6336:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
+      - "8001:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 volumes:
   postgres_data:
-  qdrant_data:
