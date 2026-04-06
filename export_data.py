@@ -6,6 +6,8 @@ import argparse
 import warnings
 from dotenv import load_dotenv
 
+from security import escape_dataframe_cells
+
 warnings.filterwarnings("ignore", category=UserWarning, module="pandas")
 
 load_dotenv()
@@ -94,12 +96,12 @@ def export_json(df, output_file, mode='full'):
     print(f"✅ Successfully exported {len(df)} records to {output_file} (Mode: {mode})")
 
 def export_csv(df, output_file, mode='full'):
-    flat_df = flatten_raw_data(df, mode)
+    flat_df = escape_dataframe_cells(flatten_raw_data(df, mode))
     flat_df.to_csv(output_file, index=False, encoding='utf-8')
     print(f"✅ Successfully exported {len(df)} records to {output_file} (Mode: {mode})")
 
 def export_xlsx(df, output_file, mode='full'):
-    flat_df = flatten_raw_data(df, mode)
+    flat_df = escape_dataframe_cells(flatten_raw_data(df, mode))
     flat_df.to_excel(output_file, index=False, engine='openpyxl')
     print(f"✅ Successfully exported {len(df)} records to {output_file} (Mode: {mode})")
 

@@ -7,6 +7,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import json
 
+from security import escape_dataframe_cells
+
 warnings.filterwarnings("ignore", category=UserWarning, module="pandas")
 
 load_dotenv()
@@ -170,12 +172,12 @@ def extract_light_data(df):
     return df.drop(columns=['raw_data'])
 
 def export_csv(df, output_file):
-    flat_df = extract_light_data(df)
+    flat_df = escape_dataframe_cells(extract_light_data(df))
     flat_df.to_csv(output_file, index=False, encoding='utf-8')
     print(f"✅ Successfully exported {len(df)} target profiles to {output_file}")
 
 def export_xlsx(df, output_file):
-    flat_df = extract_light_data(df)
+    flat_df = escape_dataframe_cells(extract_light_data(df))
     flat_df.to_excel(output_file, index=False, engine='openpyxl')
     print(f"✅ Successfully exported {len(df)} target profiles to {output_file}")
 
