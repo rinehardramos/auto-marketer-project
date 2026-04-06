@@ -1,7 +1,15 @@
 # Virtual Environment
 venv/
+.venv/
 __pycache__/
 *.pyc
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Phase 5 fine-tune artifacts (generated, not committed)
+finetune_dataset.jsonl
 
 # Environment Variables
 .env

@@ -42,3 +42,21 @@ This document details the roadmap for making the Auto Marketer AI agent self-imp
   - Document the fine-tuning process.
   - Create an evaluation script to run the fine-tuned model against the base model using the `test_grading.py` suite.
 - **Dependencies:** Requires a significant dataset of graded profiles (100+).
+
+## Phase 6: Security — Sanitize Untrusted Data (Immediate)
+- **Goal:** Treat all data flowing in from third parties (Apify/LinkedIn raw fields, DuckDuckGo search results, scraped web pages, LLM output, user CLI input) as untrusted, and sanitize it before it reaches the LLM, the network, or exported spreadsheets.
+- **Threat model:**
+  - **SSRF:** `scrape_url` and the Apify dataset fetch follow arbitrary URLs. Without host validation an attacker can pivot to `127.0.0.1`, RFC1918 ranges, or cloud-metadata IPs (`169.254.169.254`).
+  - **Prompt injection:** Scraped page text and LinkedIn `headline`/`about` fields are concatenated directly into system/user messages, letting attacker-controlled content rewrite the agent's instructions or exfiltrate data via crafted search queries.
+  - **CSV/XLSX formula injection:** Cells beginning with `=`, `+`, `-`, `@`, `\t`, or `\r` are executed as formulas by Excel/Sheets when an analyst opens an export.
+  - **SQL / DB attacks:** All current queries are parameterized, but PostgreSQL TEXT/JSONB rejects `\x00`, identifier-injection is a risk for any future dynamic ALTER/SELECT, and oversized field values can DoS psycopg2, Qdrant, and the embedding model.
+  - **Hostile ingestion payloads:** Apify (or anything proxied by `APIFY_DATASET_URL`) is third-party data. Unbounded `response.json()` is a memory-DoS, non-string field types crash the cursor, and a megabyte `about` field can lock the local embedding model.
+  - **Scraping attacks:** A scraped URL may return non-HTML (binary, huge JSON, parser bombs); BeautifulSoup will happily try to parse it. LLM-supplied search queries can be unbounded or contain control characters.
+  - **Untrusted CLI input:** `interactive_grading` writes raw `input()` straight into Postgres — needs NUL scrub + length cap.
+- **Tasks:**
+  - Shared `security.py` with `safe_fetch_url` (scheme allow-list, DNS-time private/loopback/link-local block, redirect off, body cap, optional Content-Type allow-list), `sanitize_for_prompt`, `escape_spreadsheet_cell` / `escape_dataframe_cells`, `coerce_db_text`, `scrub_jsonb`, `validate_search_query`, and `is_safe_sql_identifier`.
+  - `research_agent.py`: SSRF guard + HTML Content-Type check on `scrape_url`; sanitize all untrusted strings before they reach the LLM; defensive system-prompt clause; validate LLM-chosen DDG queries; coerce CLI feedback before INSERT.
+  - `ingest.py`: route the Apify fetch through `safe_fetch_url` (50 MiB cap, JSON Content-Type required); reject non-list payloads; coerce every profile field with `coerce_db_text`; `scrub_jsonb` before writing JSONB; cap embedding input length.
+  - `export_data.py` / `generate_emails.py`: pass every export DataFrame through `escape_dataframe_cells`.
+  - All SQL stays parameterized; `is_safe_sql_identifier` is the gate any future dynamic identifier interpolation must pass.
+- **Dependencies:** None.

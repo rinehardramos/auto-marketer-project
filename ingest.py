@@ -1,5 +1,4 @@
 import os
-import requests
 import json
 import psycopg2
 import uuid
@@ -7,6 +6,22 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 from openai import OpenAI
 from dotenv import load_dotenv
+
+from security import (
+    safe_fetch_url,
+    coerce_db_text,
+    scrub_jsonb,
+    JSON_CONTENT_TYPES,
+    DEFAULT_EMBEDDING_INPUT_MAX,
+    UnsafeURLError,
+)
+
+# Hard caps for hostile upstream data
+MAX_APIFY_BYTES = 50 * 1024 * 1024  # 50 MiB on the dataset response
+MAX_PROFILE_ID_LEN = 128
+MAX_NAME_LEN = 256
+MAX_HEADLINE_LEN = 1024
+MAX_ABOUT_LEN = 8000
 
 load_dotenv()
 
@@ -76,38 +91,58 @@ def ingest_data():
     collection_name = setup_qdrant()
 
     print("Fetching data from Apify...")
-    response = requests.get(APIFY_URL)
-    response.raise_for_status()
+    try:
+        response = safe_fetch_url(
+            APIFY_URL,
+            timeout=30,
+            max_bytes=MAX_APIFY_BYTES,
+            allowed_content_types=JSON_CONTENT_TYPES,
+        )
+    except UnsafeURLError as e:
+        print(f"Refused unsafe APIFY_DATASET_URL: {e}")
+        return
     data = response.json()
-    
+    if not isinstance(data, list):
+        print("Apify response was not a list of profiles; aborting.")
+        return
+
     print(f"Fetched {len(data)} profiles. Ingesting...")
 
     for i, profile in enumerate(data):
-        profile_id = profile.get("id")
+        if not isinstance(profile, dict):
+            continue
+        profile_id = coerce_db_text(profile.get("id"), max_length=MAX_PROFILE_ID_LEN)
         if not profile_id:
             continue
-            
-        first_name = profile.get("firstName", "")
-        last_name = profile.get("lastName", "")
-        headline = profile.get("headline", "")
-        about = profile.get("about", "")
-        
-        # Combine text for embedding
-        text_to_embed = f"{first_name} {last_name}\\nHeadline: {headline}\\nAbout: {about}"
-        
+
+        first_name = coerce_db_text(profile.get("firstName"), max_length=MAX_NAME_LEN)
+        last_name = coerce_db_text(profile.get("lastName"), max_length=MAX_NAME_LEN)
+        headline = coerce_db_text(profile.get("headline"), max_length=MAX_HEADLINE_LEN)
+        about = coerce_db_text(profile.get("about"), max_length=MAX_ABOUT_LEN)
+
+        # Cap embedding input — prevents a single 5MB "about" field from
+        # locking up the local embedding model.
+        text_to_embed = f"{first_name} {last_name}\nHeadline: {headline}\nAbout: {about}"
+        if len(text_to_embed) > DEFAULT_EMBEDDING_INPUT_MAX:
+            text_to_embed = text_to_embed[:DEFAULT_EMBEDDING_INPUT_MAX]
+
+        # Recursively strip NUL bytes / cap strings before pushing the
+        # blob into a JSONB column (Postgres rejects \x00 in JSONB).
+        safe_raw = scrub_jsonb(profile)
+
         try:
             print(f"Processing {i+1}/{len(data)}: {first_name} {last_name}")
-            
-            # Save to Postgres
+
+            # Save to Postgres (parameterized — no SQL injection surface)
             cur.execute("""
                 INSERT INTO linkedin_profiles (id, first_name, last_name, headline, about, raw_data)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO NOTHING
-            """, (profile_id, first_name, last_name, headline, about, json.dumps(profile)))
-            
+            """, (profile_id, first_name, last_name, headline, about, json.dumps(safe_raw)))
+
             # Generate Embedding
             embedding = get_embedding(text_to_embed)
-            
+
             # Save to Qdrant
             qdrant_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, profile_id))
             qdrant.upsert(
