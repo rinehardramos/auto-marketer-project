@@ -82,3 +82,14 @@ also registered on public PyPI.
 
 Security issues: open a private advisory on the project repo. Do not
 file public issues for unpatched vulnerabilities.
+
+## Note on scope (v0.4.0)
+
+The information-gathering threat surface (SSRF in scrapers, prompt
+injection from raw HTML, ingest-side DoS) has moved to the sibling
+`info-broker` repo. auto-marketer now only handles trusted data
+returned from info-broker plus LLM output destined for outbound email,
+so the surviving security helpers in `security.py` are the prompt
+sanitizer, the spreadsheet-formula escaper, and the DB text/identifier
+guards. The SSRF helper is still imported in case future integrations
+need it.

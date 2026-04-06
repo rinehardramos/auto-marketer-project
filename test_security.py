@@ -18,7 +18,6 @@ from security import (
     DEFAULT_DB_TEXT_MAX,
     DEFAULT_SEARCH_QUERY_MAX,
     HTML_CONTENT_TYPES,
-    JSON_CONTENT_TYPES,
     UnsafeURLError,
     coerce_db_text,
     escape_dataframe_cells,
@@ -291,46 +290,4 @@ class TestSearchQueryValidation:
         assert validate_search_query("Acme Corp NYC") == "Acme Corp NYC"
 
 
-# ---------------------------------------------------------------------------
-# Integration: research_agent.scrape_url must refuse SSRF + non-HTML
-# ---------------------------------------------------------------------------
-
-try:
-    import research_agent  # noqa: E402
-    _RESEARCH_AGENT_AVAILABLE = True
-except Exception:
-    _RESEARCH_AGENT_AVAILABLE = False
-
-requires_research_agent = pytest.mark.skipif(
-    not _RESEARCH_AGENT_AVAILABLE,
-    reason="research_agent runtime deps (bs4, psycopg2, openai, ...) not installed",
-)
-
-
-@requires_research_agent
-class TestScrapeUrlIntegration:
-    def test_scrape_refuses_internal_url(self):
-        # Should NOT raise — should return "" and log
-        assert research_agent.scrape_url("http://169.254.169.254/latest/meta-data/") == ""
-
-    def test_scrape_refuses_file_scheme(self):
-        assert research_agent.scrape_url("file:///etc/passwd") == ""
-
-
-# ---------------------------------------------------------------------------
-# Integration: search_web must drop hostile/empty queries
-# ---------------------------------------------------------------------------
-
-@requires_research_agent
-class TestSearchWebIntegration:
-    def test_empty_query_short_circuits(self):
-        with patch.object(research_agent.ddgs, "text") as mock_text:
-            assert research_agent.search_web("   ") == []
-            mock_text.assert_not_called()
-
-    def test_control_char_query_sanitized_before_ddg(self):
-        with patch.object(research_agent.ddgs, "text", return_value=[]) as mock_text:
-            research_agent.search_web("acme\x00corp")
-            sent = mock_text.call_args.args[0]
-            assert "\x00" not in sent
-            assert "acme" in sent and "corp" in sent
+# research_agent integration tests removed: research moved to info-broker.

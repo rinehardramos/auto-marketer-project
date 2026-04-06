@@ -24,3 +24,5 @@ targeted_campaign.json
 .vscode/
 .idea/
 .DS_Store
+.claude/
+
