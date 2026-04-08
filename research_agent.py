@@ -108,11 +108,10 @@ def save_grading_to_memory(profile_id, profile_text, grade, feedback):
 
 
 def recall_similar_mistakes(profile_text, top_k=RECALL_TOP_K):
-    """Return up to `top_k` past low-grade feedback entries similar to this profile."""
+    """Return up to  past low-grade feedback entries similar to this profile."""
     setup_feedback_collection()
     vector = get_embedding(profile_text)
     try:
-    try:
         response = qdrant.query_points(
             collection_name=FEEDBACK_COLLECTION,
             query=vector,
@@ -122,27 +121,6 @@ def recall_similar_mistakes(profile_text, top_k=RECALL_TOP_K):
             ),
         )
         hits = response.points
-    except Exception as e:
-        print(f"  [Memory] Recall failed: {e}")
-        return []
-            limit=top_k,
-            query_filter=Filter(
-                must=[FieldCondition(key="grade", range=Range(lte=LOW_GRADE_THRESHOLD))]
-            ),
-        )
-    try:
-        response = qdrant.query_points(
-            collection_name=FEEDBACK_COLLECTION,
-            query=vector,
-            limit=top_k,
-            query_filter=Filter(
-                must=[FieldCondition(key="grade", range=Range(lte=LOW_GRADE_THRESHOLD))]
-            ),
-        )
-        hits = response.points
-    except Exception as e:
-        print(f"  [Memory] Recall failed: {e}")
-        return []
     except Exception as e:
         print(f"  [Memory] Recall failed: {e}")
         return []
