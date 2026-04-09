@@ -7,7 +7,7 @@ import json
 import pandas as pd
 
 from auto_marketer import db
-from security import escape_dataframe_cells
+from auto_marketer.security import escape_dataframe_cells
 
 EXPORT_COLUMNS = [
     "id",

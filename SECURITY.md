@@ -5,7 +5,7 @@ supply-chain hardening workflow.
 
 ## Runtime hardening (Phase 6)
 
-All untrusted data flows through `security.py`:
+All untrusted data flows through `auto_marketer/security.py`:
 
 | Vector | Mitigation |
 |---|---|
@@ -89,7 +89,7 @@ The information-gathering threat surface (SSRF in scrapers, prompt
 injection from raw HTML, ingest-side DoS) has moved to the sibling
 `info-broker` repo. auto-marketer now only handles trusted data
 returned from info-broker plus LLM output destined for outbound email,
-so the surviving security helpers in `security.py` are the prompt
+so the surviving security helpers in `auto_marketer/security.py` are the prompt
 sanitizer, the spreadsheet-formula escaper, and the DB text/identifier
 guards. The SSRF helper is still imported in case future integrations
 need it.

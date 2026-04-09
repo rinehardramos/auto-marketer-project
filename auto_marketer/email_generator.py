@@ -15,7 +15,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from security import sanitize_for_prompt
+from auto_marketer.security import sanitize_for_prompt
 
 log = logging.getLogger(__name__)
 
