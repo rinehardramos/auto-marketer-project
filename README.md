@@ -19,7 +19,7 @@ flowchart LR
 
 - **Two-service architecture:** Consumes prospect data from `info-broker` via a robust REST client with tenacity-based retries.
 - **Campaign management:** Organize outreach into campaigns with specific tones, goals, and target profiles.
-- **High-throughput generation:** Parallelized email drafting using LM Studio or OpenAI-compatible local/remote LLMs.
+- **High-throughput generation:** Parallelized email drafting via Google Gemini (default) or any OpenAI-compatible LLM — provider-selectable at runtime.
 - **Safety-first sending:** Native support for `dry-run` providers to preview outreach before live SMTP delivery.
 - **Smart rate-limiting:** Granular control over sending velocity to protect your domain reputation.
 - **Flexible exports:** Campaign results available in JSON, CSV, and XLSX formats for CRM integration.
@@ -27,7 +27,7 @@ flowchart LR
 
 ## Quickstart
 
-Prerequisites: Python 3.10+, [`uv`](https://github.com/astral-sh/uv), Docker Desktop, and an LLM server (e.g., [LM Studio](https://lmstudio.ai/)).
+Prerequisites: Python 3.10+, [`uv`](https://github.com/astral-sh/uv), Docker Desktop, and a Gemini API key (or an OpenAI-compatible LLM server for the `lmstudio` provider).
 
 1. **Clone and install:**
    ```bash

@@ -3,6 +3,10 @@
 The output schema is enforced by asking the model to return JSON with
 ``subject`` and ``body`` keys. We parse defensively because local models
 sometimes wrap JSON in code fences or chatter.
+
+Supported providers (``LLM_PROVIDER`` env var or ``--provider`` CLI flag):
+  google    — Gemini via its OpenAI-compatible endpoint (default)
+  lmstudio  — Local LM Studio instance
 """
 from __future__ import annotations
 
@@ -19,9 +23,24 @@ from auto_marketer.security import sanitize_for_prompt
 
 log = logging.getLogger(__name__)
 
-LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
-LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
-DEFAULT_MODEL = os.getenv("CHAT_MODEL_NAME", "local-model")
+# ---------------------------------------------------------------------------
+# Provider registry
+# ---------------------------------------------------------------------------
+
+_PROVIDERS: dict[str, dict[str, str]] = {
+    "google": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "api_key_env": "GEMINI_API_KEY",
+        "default_model": "gemini-2.5-pro",
+    },
+    "lmstudio": {
+        "base_url": os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
+        "api_key_env": "LM_STUDIO_API_KEY",
+        "default_model": os.getenv("CHAT_MODEL_NAME", "local-model"),
+    },
+}
+
+DEFAULT_PROVIDER = os.getenv("LLM_PROVIDER", "google")
 
 DEFAULT_GOAL = (
     "Offer elite offshore product development teams and Virtual Assistants "
@@ -36,8 +55,18 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _build_client() -> OpenAI:
-    return OpenAI(base_url=LM_STUDIO_BASE_URL, api_key=LM_STUDIO_API_KEY)
+def _build_client(provider: str = DEFAULT_PROVIDER) -> OpenAI:
+    cfg = _PROVIDERS.get(provider)
+    if cfg is None:
+        raise ValueError(f"Unknown LLM provider {provider!r}. Choose from: {list(_PROVIDERS)}")
+    api_key = os.getenv(cfg["api_key_env"], "")
+    if not api_key:
+        raise ValueError(f"Provider {provider!r} requires env var {cfg['api_key_env']} to be set")
+    return OpenAI(base_url=cfg["base_url"], api_key=api_key)
+
+
+def _default_model(provider: str = DEFAULT_PROVIDER) -> str:
+    return _PROVIDERS.get(provider, _PROVIDERS["google"])["default_model"]
 
 
 def _extract_company(profile: dict) -> str:
@@ -93,6 +122,7 @@ def generate_email(
     tone: str = "professional",
     goal: str = DEFAULT_GOAL,
     model: str | None = None,
+    provider: str = DEFAULT_PROVIDER,
     client: OpenAI | None = None,
 ) -> dict[str, str]:
     """Generate a single personalized email for ``profile``.
@@ -124,9 +154,9 @@ def generate_email(
         'Reply with JSON: {"subject": "...", "body": "..."}'
     )
 
-    client = client or _build_client()
+    client = client or _build_client(provider)
     response = client.chat.completions.create(
-        model=model or DEFAULT_MODEL,
+        model=model or _default_model(provider),
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -145,6 +175,7 @@ def generate_batch(
     tone: str = "professional",
     goal: str = DEFAULT_GOAL,
     model: str | None = None,
+    provider: str = DEFAULT_PROVIDER,
     client: OpenAI | None = None,
 ) -> list[dict[str, Any]]:
     """Generate emails for many profiles in parallel.
@@ -156,7 +187,9 @@ def generate_batch(
 
     def _one(idx: int, prof: dict) -> tuple[int, dict[str, Any]]:
         try:
-            email = generate_email(prof, tone=tone, goal=goal, model=model, client=client)
+            email = generate_email(
+                prof, tone=tone, goal=goal, model=model, provider=provider, client=client
+            )
             return idx, {
                 "profile": prof,
                 "ok": True,
