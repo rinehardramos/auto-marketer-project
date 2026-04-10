@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import sys
 
+from dotenv import load_dotenv
+
 from auto_marketer import db, exporter, sender as sender_mod
 from auto_marketer.email_generator import generate_batch
 from auto_marketer.info_broker_client import InfoBrokerClient
@@ -25,7 +27,13 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     broker = InfoBrokerClient()
     profiles = broker.list_profiles(status=args.status, limit=args.limit)
     print(f"fetched {len(profiles)} profiles from info-broker")
-    results = generate_batch(profiles, workers=args.workers, tone=campaign["tone"], goal=campaign["goal"])
+    results = generate_batch(
+        profiles,
+        workers=args.workers,
+        tone=campaign["tone"],
+        goal=campaign["goal"],
+        provider=args.provider,
+    )
     ok = fail = 0
     for r in results:
         prof = r["profile"] or {}
@@ -94,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--limit", type=int, default=50)
     gen.add_argument("--status", default="completed")
     gen.add_argument("--workers", type=int, default=3)
+    gen.add_argument("--provider", choices=["google", "lmstudio"], default="google")
     gen.set_defaults(func=_cmd_generate)
 
     snd = sub.add_parser("send", help="Send drafts in a campaign")
@@ -112,6 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args) or 0)
